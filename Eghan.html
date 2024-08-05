@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Configuration Map with Legend</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <style>
+        /* Set the size of the map */
+        #map {
+            height: 90vh;
+            width: 100%;
+        }
+        .label {
+            font-size: 12px;
+            font-weight: bold;
+            color: #003366;
+            background-color: #ffff00aa; /* Yellow background */
+            padding: 2px 5px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .legend {
+            background: white;
+            line-height: 1.5em;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+        }
+        .legend i {
+            width: 18px;
+            height: 18px;
+            float: left;
+            margin-right: 8px;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <h3>Network Configuration in Egham (ARIANE Project)</h3>
+    <div id="map"></div>
+
+    <!-- Leaflet JavaScript library -->
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script>
+        // Initialize the map and set its view to Egham
+        const map = L.map('map').setView([51.4295, -0.5541], 14);
+
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 18,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Define locations for the CU and DUs with labels
+        const locations = [
+            { title: "CU (Centralized Unit)", lat: 51.4288, lng: -0.5500, type: "CU", label: "CU" },
+            { title: "DU1 (Egham Town Center)", lat: 51.4330, lng: -0.5495, type: "DU", label: "Egham Town Center" }, // Adjusted towards Runnymede Park
+            { title: "DU2 (Royal Holloway University)", lat: 51.4243, lng: -0.5646, type: "DU", label: "Royal Holloway University" },
+            { title: "DU3 (Thorpe Industrial Estate)", lat: 51.4121, lng: -0.5355, type: "DU", label: "Thorpe Industrial Estate" },
+            { title: "DU4 (Pooley Green)", lat: 51.4207, lng: -0.5368, type: "DU", label: "Pooley Green" },
+            { title: "DU5 (Englefield Green)", lat: 51.4306, lng: -0.5744, type: "DU", label: "Englefield Green" },
+            { title: "DU6 (Virginia Water)", lat: 51.4036, lng: -0.5795, type: "DU", label: "Virginia Water", radiusMultiplier: 2.5 } // Increased coverage
+        ];
+
+        // Define a larger array of colors for unique sectors
+        const sectorColors = ['#FFB6C1', '#ADD8E6', '#E0FFFF', '#FFD700', '#DA70D6', '#FFFACD', '#F0E68C', '#D3D3D3',
+                              '#90EE90', '#FFA07A', '#20B2AA', '#87CEEB', '#B0E0E6', '#FFC0CB', '#D8BFD8', '#FFA500',
+                              '#7FFFD4', '#E6E6FA', '#B22222', '#5F9EA0', '#F08080', '#6495ED', '#DC143C', '#00008B'];
+
+        // Function to calculate point based on angle and radius
+        function getPoint(lat, lng, angle, radius) {
+            const radAngle = angle * (Math.PI / 180);
+            const pointLat = lat + (radius * Math.cos(radAngle)) / 111000;
+            const pointLng = lng + (radius * Math.sin(radAngle)) / (111000 * Math.cos(lat * Math.PI / 180));
+            return [pointLat, pointLng];
+        }
+
+        // Add labels, markers, and sectors for each location
+        locations.forEach((location, index) => {
+            const baseRadius = 800; // Reduced base coverage radius
+            const radiusMultiplier = location.radiusMultiplier || 1; // Default multiplier is 1
+            const radius = baseRadius * radiusMultiplier;
+
+            // Position the DU name label inside the circle at a sparse location
+            if (location.type === "DU") {
+                const labelPosition = getPoint(location.lat, location.lng, 45, radius / 2); // Sparse location inside the circle
+                L.marker(labelPosition, {
+                    icon: L.divIcon({
+                        className: 'label',
+                        html: location.label,
+                        iconSize: [location.label.length * 8, 20], // Dynamically size based on label length
+                        iconAnchor: [location.label.length * 4, 10]
+                    })
+                }).addTo(map);
+            }
+
+            // Add 3 sectors per DU
+            if (location.type === "DU") {
+                // Draw the DU coverage circle
+                L.circle([location.lat, location.lng], {
+                    color: 'gray', // DU coverage color
+                    fillColor: 'none',
+                    fillOpacity: 0.2,
+                    radius: radius // Adjusted coverage radius
+                }).addTo(map);
+
+                const ruIcon = L.icon({
+                    iconUrl: 'https://cdn-icons-png.flaticon.com/512/64/64509.png', // Red mobile tower mast icon
+                    iconSize: [15, 15],
+                    iconAnchor: [7, 15]
+                });
+
+                for (let i = 0; i < 3; i++) {
+                    const ruAngle = i * 120; // Sector angles at 0, 120, 240 degrees
+                    const ruLat = location.lat;
+                    const ruLng = location.lng;
+
+                    // Define sector angle range
+                    const arcPoints = [];
+                    for (let angle = ruAngle - 60; angle <= ruAngle + 60; angle += 2) {
+                        const point = getPoint(ruLat, ruLng, angle, radius);
+                        arcPoints.push(point);
+                    }
+
+                    // Fill the full arc (sector) with color
+                    L.polygon([[ruLat, ruLng], ...arcPoints], {
+                        fillColor: sectorColors[(index * 3 + i) % sectorColors.length],
+                        fillOpacity: 0.5,
+                        color: 'black', // Sector border color
+                        weight: 1
+                    }).addTo(map);
+
+                    // Calculate midpoint for sector name
+                    const midAngle = (ruAngle - 60 + ruAngle + 60) / 2;
+                    const midPoint = getPoint(ruLat, ruLng, midAngle, radius / 2);
+                    const [midLat, midLng] = midPoint;
+
+                    // Add RU marker positioned slightly offset to avoid overlap
+                    const ruOffsetPoint = getPoint(ruLat, ruLng, midAngle, 50); // Slightly closer to center
+                    L.marker(ruOffsetPoint, { icon: ruIcon }).addTo(map);
+                }
+            }
+
+            const marker = L.marker([location.lat, location.lng])
+                .addTo(map)
+                .bindPopup(location.title);
+
+            if (location.type === "CU") {
+                // Differentiate CU marker with a different color and icon
+                marker.setIcon(L.icon({
+                    iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png', // Example custom icon
+                    iconSize: [35, 35], // Icon size for CU
+                    iconAnchor: [17, 35]
+                }));
+            }
+        });
+
+        // Add 2000 UEs distributed across the coverage areas
+        const ueIcon = L.icon({
+            iconUrl: 'https://cdn-icons-png.flaticon.com/512/149/149071.png', // Small icon for UEs
+            iconSize: [10, 10], // Smaller icon size
+            iconAnchor: [5, 5]
+        });
+
+        const totalUEs = 2000;
+        const ueDistribution = [0, 250, 250, 250, 250, 250, 750]; // Uneven distribution
+
+        ueDistribution.forEach((ueCount, index) => {
+            const duLocation = locations[index];
+            const baseRadius = 800; // Use the same base radius as the DU coverage
+            const radiusMultiplier = duLocation.radiusMultiplier || 1;
+            const radius = baseRadius * radiusMultiplier;
+
+            for (let i = 0; i < ueCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Math.random() * radius; // Ensure UE is within the DU coverage area
+                const offsetLat = distance * Math.cos(angle) / 111000; // Convert to degrees
+                const offsetLng = distance * Math.sin(angle) / (111000 * Math.cos(duLocation.lat * Math.PI / 180));
+                const ueLat = duLocation.lat + offsetLat;
+                const ueLng = duLocation.lng + offsetLng;
+                L.marker([ueLat, ueLng], { icon: ueIcon }).addTo(map);
+            }
+        });
+    </script>
+</body>
+</html>
